@@ -1,6 +1,7 @@
 "use client";
 import React, { useState } from 'react';
 import { Phone, Mail, MapPin, Clock, Send, AlertCircle } from 'lucide-react';
+import emailjs from '@emailjs/browser';
 
 const ContactPage = () => {
   // Form state
@@ -19,6 +20,15 @@ const ContactPage = () => {
   });
 
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [useMailTo, setUseMailTo] = useState(false);
+
+  // EmailJS Configuration from environment variables
+  const EMAILJS_SERVICE_ID = process.env.NEXT_PUBLIC_EMAILJS_SERVICE_ID;
+  const EMAILJS_TEMPLATE_ID = process.env.NEXT_PUBLIC_EMAILJS_TEMPLATE_ID;
+  const EMAILJS_PUBLIC_KEY = process.env.NEXT_PUBLIC_EMAILJS_PUBLIC_KEY;
+
+  // Check if EmailJS is properly configured
+  const isEmailJSConfigured = EMAILJS_SERVICE_ID && EMAILJS_TEMPLATE_ID && EMAILJS_PUBLIC_KEY;
 
   // Handle form input changes
   const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>) => {
@@ -29,70 +39,103 @@ const ContactPage = () => {
     }));
   };
 
-  // Handle form submission
-  // Define interfaces for the form data and status
-  interface FormData {
-    name: string;
-    email: string;
-    phone: string;
-    service: string;
-    message: string;
-  }
-  
-  interface FormStatus {
-    submitted: boolean;
-    error: boolean;
-    message: string;
-  }
-
-// Replace your existing handleSubmit function with this one
-
-const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
-  e.preventDefault();
-  setIsSubmitting(true);
-  
-  try {
-    // Send form data to your API route
-    const response = await fetch('/api/contact', {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify(formData),
-    });
-
-    const data = await response.json();
+  // Generate mailto link
+  const generateMailToLink = () => {
+    const subject = `KLS Security Inquiry - ${formData.service || 'General'} Service`;
+    const body = `Name: ${formData.name}\nEmail: ${formData.email}\nPhone: ${formData.phone}\nService Interested In: ${formData.service}\n\nMessage:\n${formData.message}`;
     
-    if (!response.ok) {
-      throw new Error(data.message || 'Something went wrong');
+    return `mailto:inquiries@klssecurity.co.za?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`;
+  };
+
+  // Handle form submission with EmailJS
+  const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
+    e.preventDefault();
+    
+    // If user prefers mailto or EmailJS is not configured, use mailto
+    if (useMailTo || !isEmailJSConfigured) {
+      window.location.href = generateMailToLink();
+      
+      // Show success message even for mailto
+      setFormStatus({
+        submitted: true,
+        error: false,
+        message: 'Your email client is opening with your message. Please send the email to complete your inquiry.'
+      });
+      
+      // Reset form
+      setFormData({
+        name: '',
+        email: '',
+        phone: '',
+        service: '',
+        message: '',
+      });
+      return;
     }
     
-    // Display success message
-    setFormStatus({
-      submitted: true,
-      error: false,
-      message: data.message || 'Thank you for your message! We will contact you shortly.'
-    });
+    // Otherwise, use EmailJS
+    setIsSubmitting(true);
     
-    // Reset form
-    setFormData({
-      name: '',
-      email: '',
-      phone: '',
-      service: '',
-      message: '',
-    });
-  } catch (error: any) {
-    console.error('Error submitting form:', error);
+    try {
+      // Prepare template parameters for EmailJS
+      const templateParams = {
+        from_name: formData.name,
+        from_email: formData.email,
+        phone: formData.phone,
+        service: formData.service,
+        message: formData.message,
+        to_name: 'KLS Security Team',
+      };
+
+      // Send email using EmailJS
+      const result = await emailjs.send(
+        EMAILJS_SERVICE_ID!,
+        EMAILJS_TEMPLATE_ID!,
+        templateParams,
+        EMAILJS_PUBLIC_KEY!
+      );
+
+      console.log('Email sent successfully:', result);
+      
+      // Display success message
+      setFormStatus({
+        submitted: true,
+        error: false,
+        message: 'Thank you for your message! We will contact you shortly.'
+      });
+      
+      // Reset form
+      setFormData({
+        name: '',
+        email: '',
+        phone: '',
+        service: '',
+        message: '',
+      });
+
+    } catch (error: any) {
+      console.error('Error sending email:', error);
+      
+      // If EmailJS fails, offer to use mailto instead
+      setFormStatus({
+        submitted: true,
+        error: true,
+        message: 'There was an error sending your message. Would you like to try using your email client instead?'
+      });
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
+
+  // Handle mailto fallback when EmailJS fails
+  const handleMailToFallback = () => {
+    window.location.href = generateMailToLink();
     setFormStatus({
-      submitted: true,
-      error: true,
-      message: error.message || 'There was an error submitting your message. Please try again or contact us directly at 079 596 5491.'
+      submitted: false,
+      error: false,
+      message: ''
     });
-  } finally {
-    setIsSubmitting(false);
-  }
-};
+  };
 
   return (
     <div className="min-h-screen bg-gray-50">
@@ -135,8 +178,8 @@ const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
               <h3 className="text-xl font-bold text-gray-900 mb-2">Email Us</h3>
               <p className="text-gray-600 mb-2">For Inquiries & Support</p>
               <a href="mailto:inquiries@klssecurity.co.za" className="text-red-600 font-bold text-lg hover:text-red-700">
-  inquiries@klssecurity.co.za
-</a>
+                inquiries@klssecurity.co.za
+              </a>
             </div>
             
             {/* Location */}
@@ -161,151 +204,192 @@ const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
             </div>
           </div>
           
-            <div className="grid grid-cols-1 lg:grid-cols-2 gap-12">
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-12">
             {/* Contact Form */}
             <div>
               <h2 className="text-3xl font-bold text-gray-900 mb-6">Send Us a Message</h2>
               
-              {formStatus.submitted ? (
-              <div className={`p-6 rounded-lg mb-6 ${formStatus.error ? 'bg-red-50 border-red-100' : 'bg-green-50 border-green-100'} animate-fadeIn transition-all duration-300`}>
-                <div className="flex items-start">
-                <div className={`p-2 rounded-full ${formStatus.error ? 'bg-red-100' : 'bg-green-100'} mr-4`}>
-                  {formStatus.error ? (
-                  <AlertCircle className={`h-6 w-6 ${formStatus.error ? 'text-red-600' : 'text-green-600'}`} />
-                  ) : (
-                  <Send className="h-6 w-6 text-green-600" />
-                  )}
-                </div>
-                <div>
-                  <h3 className={`text-lg font-semibold ${formStatus.error ? 'text-red-800' : 'text-green-800'}`}>
-                  {formStatus.error ? 'Message Not Sent' : 'Message Sent Successfully!'}
-                  </h3>
-                  <p className={`${formStatus.error ? 'text-red-700' : 'text-green-700'}`}>
-                  {formStatus.message}
-                  </p>
-                  {!formStatus.error && (
-                  <p className="text-green-700 mt-2">
-                    We appreciate your interest in our services. One of our representatives will be in touch with you shortly!
-                  </p>
-                  )}
-                </div>
-                </div>
-                <div className="mt-4 text-right">
-                <button 
-                  onClick={() => setFormStatus({submitted: false, error: false, message: ''})} 
-                  className="text-sm underline text-gray-600 hover:text-gray-800"
-                >
-                  Send another message
-                </button>
-                </div>
+              {/* Email Method Toggle */}
+              <div className="mb-6 p-4 bg-gray-50 rounded-lg">
+                <label className="flex items-center cursor-pointer">
+                  <input
+                    type="checkbox"
+                    checked={useMailTo}
+                    onChange={(e) => setUseMailTo(e.target.checked)}
+                    className="sr-only"
+                  />
+                  <div className={`relative w-11 h-6 bg-gray-200 rounded-full transition-colors ${useMailTo ? 'bg-red-600' : ''}`}>
+                    <div className={`absolute top-0.5 left-0.5 bg-white w-5 h-5 rounded-full transition-transform ${useMailTo ? 'transform translate-x-5' : ''}`}></div>
+                  </div>
+                  <span className="ml-3 text-sm font-medium text-gray-700">
+                    Use email client instead of web form
+                  </span>
+                </label>
+                <p className="text-xs text-gray-500 mt-2 ml-14">
+                  {useMailTo 
+                    ? 'When you click "Send Message", your email client will open with a pre-filled message.' 
+                    : 'Your message will be sent securely through our web form.'}
+                </p>
               </div>
+              
+              {formStatus.submitted ? (
+                <div className={`p-6 rounded-lg mb-6 ${formStatus.error ? 'bg-red-50 border-red-100' : 'bg-green-50 border-green-100'} animate-fadeIn transition-all duration-300`}>
+                  <div className="flex items-start">
+                    <div className={`p-2 rounded-full ${formStatus.error ? 'bg-red-100' : 'bg-green-100'} mr-4`}>
+                      {formStatus.error ? (
+                        <AlertCircle className={`h-6 w-6 ${formStatus.error ? 'text-red-600' : 'text-green-600'}`} />
+                      ) : (
+                        <Send className="h-6 w-6 text-green-600" />
+                      )}
+                    </div>
+                    <div>
+                      <h3 className={`text-lg font-semibold ${formStatus.error ? 'text-red-800' : 'text-green-800'}`}>
+                        {formStatus.error ? 'Message Not Sent' : 'Message Sent Successfully!'}
+                      </h3>
+                      <p className={`${formStatus.error ? 'text-red-700' : 'text-green-700'}`}>
+                        {formStatus.message}
+                      </p>
+                      {formStatus.error && (
+                        <button
+                          onClick={handleMailToFallback}
+                          className="mt-3 px-4 py-2 bg-red-600 text-white rounded-md hover:bg-red-700 transition-colors text-sm"
+                        >
+                          Use Email Client Instead
+                        </button>
+                      )}
+                      {!formStatus.error && (
+                        <p className="text-green-700 mt-2">
+                          We appreciate your interest in our services. One of our representatives will be in touch with you shortly!
+                        </p>
+                      )}
+                    </div>
+                  </div>
+                  <div className="mt-4 text-right">
+                    <button 
+                      onClick={() => {
+                        setFormStatus({submitted: false, error: false, message: ''});
+                        setFormData({
+                          name: '',
+                          email: '',
+                          phone: '',
+                          service: '',
+                          message: '',
+                        });
+                      }} 
+                      className="text-sm underline text-gray-600 hover:text-gray-800"
+                    >
+                      Send another message
+                    </button>
+                  </div>
+                </div>
               ) : null}
               
               <form onSubmit={handleSubmit} className="space-y-6">
-              <div>
-                <label htmlFor="name" className="block text-sm font-medium text-gray-700 mb-1">
-                Full Name *
-                </label>
-                <input
-                type="text"
-                id="name"
-                name="name"
-                value={formData.name}
-                onChange={handleChange}
-                className="w-full px-4 py-3 border border-gray-300 rounded-md focus:ring-2 focus:ring-red-500 focus:border-red-500"
-                placeholder="Your name"
-                required
-                />
-              </div>
-              
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                 <div>
-                <label htmlFor="email" className="block text-sm font-medium text-gray-700 mb-1">
-                  Email Address *
-                </label>
-                <input
-                  type="email"
-                  id="email"
-                  name="email"
-                  value={formData.email}
-                  onChange={handleChange}
-                  className="w-full px-4 py-3 border border-gray-300 rounded-md focus:ring-2 focus:ring-red-500 focus:border-red-500"
-                  placeholder="Your email"
-                  required
-                />
+                  <label htmlFor="name" className="block text-sm font-medium text-gray-700 mb-1">
+                    Full Name *
+                  </label>
+                  <input
+                    type="text"
+                    id="name"
+                    name="name"
+                    value={formData.name}
+                    onChange={handleChange}
+                    className="w-full px-4 py-3 border border-gray-300 rounded-md focus:ring-2 focus:ring-red-500 focus:border-red-500"
+                    placeholder="Your name"
+                    required
+                  />
+                </div>
+                
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                  <div>
+                    <label htmlFor="email" className="block text-sm font-medium text-gray-700 mb-1">
+                      Email Address *
+                    </label>
+                    <input
+                      type="email"
+                      id="email"
+                      name="email"
+                      value={formData.email}
+                      onChange={handleChange}
+                      className="w-full px-4 py-3 border border-gray-300 rounded-md focus:ring-2 focus:ring-red-500 focus:border-red-500"
+                      placeholder="Your email"
+                      required
+                    />
+                  </div>
+                  
+                  <div>
+                    <label htmlFor="phone" className="block text-sm font-medium text-gray-700 mb-1">
+                      Phone Number
+                    </label>
+                    <input
+                      type="tel"
+                      id="phone"
+                      name="phone"
+                      value={formData.phone}
+                      onChange={handleChange}
+                      className="w-full px-4 py-3 border border-gray-300 rounded-md focus:ring-2 focus:ring-red-500 focus:border-red-500"
+                      placeholder="Your phone number"
+                    />
+                  </div>
                 </div>
                 
                 <div>
-                <label htmlFor="phone" className="block text-sm font-medium text-gray-700 mb-1">
-                  Phone Number
-                </label>
-                <input
-                  type="tel"
-                  id="phone"
-                  name="phone"
-                  value={formData.phone}
-                  onChange={handleChange}
-                  className="w-full px-4 py-3 border border-gray-300 rounded-md focus:ring-2 focus:ring-red-500 focus:border-red-500"
-                  placeholder="Your phone number"
-                />
+                  <label htmlFor="service" className="block text-sm font-medium text-gray-700 mb-1">
+                    Interested Service
+                  </label>
+                  <select
+                    id="service"
+                    name="service"
+                    value={formData.service}
+                    onChange={handleChange}
+                    className="w-full px-4 py-3 border border-gray-300 rounded-md focus:ring-2 focus:ring-red-500 focus:border-red-500"
+                  >
+                    <option value="">Select a service</option>
+                    <option value="professional-guarding">Professional Guarding</option>
+                    <option value="close-protection">Close Protection</option>
+                    <option value="k9-security">K9 Security Units</option>
+                    <option value="mining-security">Mining Security</option>
+                    <option value="cctv-monitoring">CCTV Monitoring</option>
+                    <option value="access-control">Access Control</option>
+                    <option value="alarm-systems">Alarm Systems</option>
+                    <option value="remote-monitoring">Remote Monitoring</option>
+                    <option value="security-equipment">Security Equipment</option>
+                    <option value="other">Other/Multiple Services</option>
+                  </select>
                 </div>
-              </div>
-              
-              <div>
-                <label htmlFor="service" className="block text-sm font-medium text-gray-700 mb-1">
-                Interested Service
-                </label>
-                <select
-                id="service"
-                name="service"
-                value={formData.service}
-                onChange={handleChange}
-                className="w-full px-4 py-3 border border-gray-300 rounded-md focus:ring-2 focus:ring-red-500 focus:border-red-500"
-                >
-                <option value="">Select a service</option>
-                <option value="professional-guarding">Professional Guarding</option>
-                <option value="close-protection">Close Protection</option>
-                <option value="k9-security">K9 Security Units</option>
-                <option value="mining-security">Mining Security</option>
-                <option value="cctv-monitoring">CCTV Monitoring</option>
-                <option value="access-control">Access Control</option>
-                <option value="alarm-systems">Alarm Systems</option>
-                <option value="remote-monitoring">Remote Monitoring</option>
-                <option value="security-equipment">Security Equipment</option>
-                <option value="other">Other/Multiple Services</option>
-                </select>
-              </div>
-              
-              <div>
-                <label htmlFor="message" className="block text-sm font-medium text-gray-700 mb-1">
-                Message *
-                </label>
-                <textarea
-                id="message"
-                name="message"
-                value={formData.message}
-                onChange={handleChange}
-                rows={5}
-                className="w-full px-4 py-3 border border-gray-300 rounded-md focus:ring-2 focus:ring-red-500 focus:border-red-500"
-                placeholder="Tell us about your security needs"
-                required
-                />
-              </div>
-              
-            <div>
-              <button
-              type="submit"
-              disabled={isSubmitting}
-              className={`${
-                isSubmitting ? 'bg-gray-400 cursor-not-allowed' : 'bg-red-600 hover:bg-red-700'
-              } text-white font-medium py-3 px-6 rounded-md transition-colors flex items-center justify-center w-full`}
-              >
-                {isSubmitting ? 'Sending...' : 'Send Message'}
-                {isSubmitting ? null : <Send className="ml-2 h-5 w-5" />}
-              </button>
+                
+                <div>
+                  <label htmlFor="message" className="block text-sm font-medium text-gray-700 mb-1">
+                    Message *
+                  </label>
+                  <textarea
+                    id="message"
+                    name="message"
+                    value={formData.message}
+                    onChange={handleChange}
+                    rows={5}
+                    className="w-full px-4 py-3 border border-gray-300 rounded-md focus:ring-2 focus:ring-red-500 focus:border-red-500"
+                    placeholder="Tell us about your security needs"
+                    required
+                  />
+                </div>
+                
+                <div>
+                  <button
+                    type="submit"
+                    disabled={isSubmitting && !useMailTo}
+                    className={`${
+                      (isSubmitting && !useMailTo) ? 'bg-gray-400 cursor-not-allowed' : 'bg-red-600 hover:bg-red-700'
+                    } text-white font-medium py-3 px-6 rounded-md transition-colors flex items-center justify-center w-full`}
+                  >
+                    {useMailTo ? 'Open Email Client' : (isSubmitting ? 'Sending...' : 'Send Message')}
+                    {!isSubmitting && <Send className="ml-2 h-5 w-5" />}
+                  </button>
+                </div>
+              </form>
             </div>
-            </form>
-            </div>
+            
             {/* Map & Emergency Info */}
             <div>
               <h2 className="text-3xl font-bold text-gray-900 mb-6">Find Us</h2>
@@ -341,11 +425,27 @@ const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
                   <span className="text-white font-bold">Available 24/7</span>
                 </div>
               </div>
+
+              {/* Direct Email Option */}
+              <div className="mt-6 p-6 bg-gray-50 rounded-lg">
+                <h3 className="text-xl font-bold text-gray-900 mb-3">Prefer Direct Email?</h3>
+                <p className="text-gray-600 mb-4">
+                  You can also email us directly at:
+                </p>
+                <a 
+                  href="mailto:inquiries@klssecurity.co.za" 
+                  className="inline-flex items-center px-4 py-2 bg-white border border-gray-300 rounded-md text-gray-700 hover:bg-gray-50 transition-colors"
+                >
+                  <Mail className="w-4 h-4 mr-2" />
+                  inquiries@klssecurity.co.za
+                </a>
+              </div>
             </div>
           </div>
         </div>
       </section>
       
+      {/* Rest of your component remains the same */}
       {/* FAQ Section */}
       <section className="py-16 bg-gray-50">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">

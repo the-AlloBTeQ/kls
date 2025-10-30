@@ -33,8 +33,11 @@
     "**/*.tsx",
     ".next/types/**/*.ts",
     "next-env.d.ts",
+    ".next/types/**/*.ts",
+    "next.config.js",
+    "src/utils/pdfGenerator.js",
     "build/types/**/*.ts"
-, "next.config.js"  ],
+  ],
   "exclude": [
     "node_modules"
   ]

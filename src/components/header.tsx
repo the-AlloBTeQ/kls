@@ -45,10 +45,10 @@ export function Header() {
                   <Link href="/services/guarding" className="block px-4 py-2 text-sm text-gray-200 hover:bg-red-600 hover:text-white">
                     Professional Guarding
                   </Link>
-                  <Link href="/services/surveillance" className="block px-4 py-2 text-sm text-gray-200 hover:bg-red-600 hover:text-white">
+                  <Link href="/services/cctv" className="block px-4 py-2 text-sm text-gray-200 hover:bg-red-600 hover:text-white">
                     Surveillance Security
                   </Link>
-                  <Link href="/services/equipment" className="block px-4 py-2 text-sm text-gray-200 hover:bg-red-600 hover:text-white">
+                  <Link href="/store" className="block px-4 py-2 text-sm text-gray-200 hover:bg-red-600 hover:text-white">
                     Security Equipment
                   </Link>
                   <Link href="/services/response" className="block px-4 py-2 text-sm text-gray-200 hover:bg-red-600 hover:text-white">
